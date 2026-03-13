@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 57766c00a94a9e24abd8db6280e7344a, type: 3}
+  m_Name: Pistol_Data
+  m_EditorClassIdentifier: 
+  WeaponName: Glock 19
+  type: 0
+  automatic: 0
+  maxAmmo: 10
+  fireRate: 0.5
+  attackDamage: 1
+  reloadTime: 0.5
+  headshotMultiplier: 1.5
+  weaponRange: 20
+  fireEffect: {fileID: 0}
+  fireSound: {fileID: 0}
+  hitEffect: {fileID: 0}
+  weaponPrefab: {fileID: 5665841921632783655, guid: 5bcf97c52f7138e44892c6fe9feaf80a,
+    type: 3}

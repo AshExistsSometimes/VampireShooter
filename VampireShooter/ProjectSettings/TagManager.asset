@@ -3,19 +3,20 @@
 --- !u!78 &1
 TagManager:
   serializedVersion: 2
-  tags: []
+  tags:
+  - Vampire_Hazard
   layers:
   - Default
   - TransparentFX
   - Ignore Raycast
-  - 
+  - Player
   - Water
   - UI
+  - VampireHazard
   - 
   - 
-  - 
-  - 
-  - 
+  - Enemy/Human
+  - Enemy/Vampire
   - 
   - 
   - 

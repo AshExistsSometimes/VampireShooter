@@ -9,23 +9,38 @@ public class EnemyBase : MonoBehaviour, IDamageable
 
     protected AIMovement movement;
 
+    private Renderer[] renderers;
+    private Color[] originalColors;
+    public float flashDuration = 0.1f;
+
     public bool HeardPlayer { get; private set; }
     public Vector3 lastHeardPosition;
 
-    protected virtual void Awake() // Initializes health and movement
+    protected virtual void Awake()
     {
         currentHealth = maxHealth;
 
         movement = GetComponent<AIMovement>();
         if (movement == null)
-        {
             movement = gameObject.AddComponent<AIMovement>();
+
+        renderers = GetComponentsInChildren<Renderer>();
+        originalColors = new Color[renderers.Length];
+
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            if (renderers[i].material.HasProperty("_Color"))
+            {
+                originalColors[i] = renderers[i].material.color;
+            }
         }
     }
 
-    public virtual void TakeDamage(float damage) // Applies damage
+    public virtual void TakeDamage(float damage)
     {
         currentHealth -= damage;
+
+        StartCoroutine(DamageFlash());
 
         if (currentHealth <= 0f)
         {
@@ -49,5 +64,26 @@ public class EnemyBase : MonoBehaviour, IDamageable
     public void ClearHeardPlayer()
     {
         HeardPlayer = false;
+    }
+
+    private IEnumerator DamageFlash()
+    {
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            if (renderers[i].material.HasProperty("_Color"))
+            {
+                renderers[i].material.color = Color.red;
+            }
+        }
+
+        yield return new WaitForSeconds(flashDuration);
+
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            if (renderers[i].material.HasProperty("_Color"))
+            {
+                renderers[i].material.color = originalColors[i];
+            }
+        }
     }
 }

@@ -5,6 +5,8 @@ public class HumanBase : EnemyBase, IHuman
 {
     public bool DebugMode = false;
 
+    public GameObject deathEffect;
+
     [Header("Drain")]
     public Transform DrainPosPivot;
     public Transform MyDrainPos;
@@ -59,6 +61,9 @@ public class HumanBase : EnemyBase, IHuman
     public float fleeRepathTime = 1f;
 
     private float fleeTimer;
+
+
+    private HumanSpawner spawner;
 
 
     private Vector3 waitAnchor;
@@ -401,7 +406,22 @@ public class HumanBase : EnemyBase, IHuman
 
     public override void Die()
     {
+        if (deathEffect != null)
+        {
+            Instantiate(deathEffect, transform.position, Quaternion.identity);
+        }
+
+        if (spawner != null)
+        {
+            spawner.OnHumanDied();
+        }
+
         Destroy(gameObject);
+    }
+
+    public void SetSpawner(HumanSpawner s)
+    {
+        spawner = s;
     }
 
     private void OnDrawGizmos()

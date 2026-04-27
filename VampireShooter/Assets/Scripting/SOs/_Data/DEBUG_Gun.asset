@@ -44,7 +44,7 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  BaseSpreadAngle: 1
+  BaseSpreadAngle: 20
   PiercingLevel: 3
   FireRate: 5
   fireType: 0

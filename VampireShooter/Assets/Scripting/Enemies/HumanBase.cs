@@ -3,7 +3,10 @@ using UnityEngine;
 
 public class HumanBase : EnemyBase, IHuman
 {
+    public bool DebugMode = false;
+
     [Header("Drain")]
+    public Transform DrainPosPivot;
     public Transform MyDrainPos;
     public float drainDuration = 1.5f;
 
@@ -83,7 +86,14 @@ public class HumanBase : EnemyBase, IHuman
 
         rend = GetComponentInChildren<Renderer>();
         if (rend != null)
-            originalColor = rend.material.color;
+        {
+            var mat = rend.material;
+
+            if (mat.HasProperty("_BaseColor"))
+                originalColor = mat.GetColor("_BaseColor");
+            else
+                originalColor = mat.color;
+        }
     }
 
     private void Update()
@@ -323,12 +333,47 @@ public class HumanBase : EnemyBase, IHuman
 
         float t = 0f;
         Vector3 startPos = attackerTransform.position;
-        Vector3 targetPos = MyDrainPos.position;
 
         while (t < 1f)
         {
+            // --- ROTATE HUMAN PIVOT TO FACE PLAYER (Y ONLY) ---
+            if (DrainPosPivot != null)
+            {
+                Vector3 dir = attackerTransform.position - DrainPosPivot.position;
+                dir.y = 0f;
+
+                if (dir.sqrMagnitude > 0.001f)
+                {
+                    Quaternion targetRot = Quaternion.LookRotation(dir);
+                    DrainPosPivot.rotation = targetRot;
+                }
+            }
+
+            // --- GET UPDATED TARGET POSITION AFTER ROTATION ---
+            Vector3 targetPos = MyDrainPos.position;
+
+            // --- MOVE PLAYER ---
             t += Time.deltaTime * 5f;
             attackerTransform.position = Vector3.Lerp(startPos, targetPos, t);
+
+            // --- ROTATE PLAYER TO FACE DRAIN PIVOT (Y ONLY) ---
+            if (DrainPosPivot != null)
+            {
+                Vector3 lookDir = DrainPosPivot.position - attackerTransform.position;
+                lookDir.y = 0f;
+
+                if (lookDir.sqrMagnitude > 0.001f)
+                {
+                    Quaternion targetRot = Quaternion.LookRotation(lookDir);
+
+                    attackerTransform.rotation = Quaternion.Slerp(
+                        attackerTransform.rotation,
+                        targetRot,
+                        Time.deltaTime * 10f
+                    );
+                }
+            }
+
             yield return null;
         }
 
@@ -340,7 +385,12 @@ public class HumanBase : EnemyBase, IHuman
             if (rend != null)
             {
                 float lerp = fadeT / drainDuration;
-                rend.material.color = Color.Lerp(originalColor, Color.gray, lerp);
+                var mat = rend.material;
+
+                if (mat.HasProperty("_BaseColor"))
+                    mat.SetColor("_BaseColor", Color.Lerp(originalColor, Color.gray, lerp));
+                else
+                    mat.color = Color.Lerp(originalColor, Color.gray, lerp);
             }
 
             yield return null;
@@ -356,6 +406,8 @@ public class HumanBase : EnemyBase, IHuman
 
     private void OnDrawGizmos()
     {
+        if (!DebugMode) { return; }
+
         if (player == null) return;
 
         // View range circle

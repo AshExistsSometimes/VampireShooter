@@ -315,7 +315,32 @@ public class PlayerMovement : MonoBehaviour
 
         target.Drain(GetComponent<IVampire>());
 
-        yield return new WaitForSeconds(1.5f);
+        float duration = 1.5f;
+        float t = 0f;
+
+        while (t < duration)
+        {
+            t += Time.deltaTime;
+
+            // Force player to keep looking at drain pivot
+            if (target.DrainPosPivot != null)
+            {
+                Vector3 dir = target.DrainPosPivot.position - transform.position;
+                dir.y = 0f;
+
+                if (dir.sqrMagnitude > 0.001f)
+                {
+                    Quaternion targetRot = Quaternion.LookRotation(dir);
+                    transform.rotation = Quaternion.Slerp(
+                        transform.rotation,
+                        targetRot,
+                        Time.deltaTime * 10f
+                    );
+                }
+            }
+
+            yield return null;
+        }
 
         // Restore health
         if (TryGetComponent<PlayerHealth>(out PlayerHealth ph))

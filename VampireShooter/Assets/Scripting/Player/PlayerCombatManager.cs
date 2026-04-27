@@ -13,6 +13,8 @@ public class PlayerCombatManager : MonoBehaviour
     private int currentWeaponIndex = 0;
     private WeaponRuntimeData currentWeaponData;
 
+    public LayerMask hitMask;
+
     [Header("References")]
     public GameObject weaponSocket;// where the equipped weapon is placed
     public Collider MeleeHitbox;
@@ -27,8 +29,12 @@ public class PlayerCombatManager : MonoBehaviour
     private bool isReloading = false;
 
     [Header("VFX")]
-    public LineRenderer tracerPrefab;
+    public LineRenderer tracer;
     public float tracerDuration = 0.05f;
+    public GameObject tracerPrefab;
+    public int maxShotgunTracers = 12;
+
+    private Coroutine tracerRoutine;
 
     [Header("Punching (Fallback if no weapons")]
     public float PunchDamage = 5f;
@@ -251,55 +257,54 @@ public class PlayerCombatManager : MonoBehaviour
     public void RangedSingleHitscan()
     {
         if (currentWeaponFirePoint == null) return;
-
         if (!ConsumeAmmo()) return;
 
-        Debug.Log("RangedSingleHitcan");
-
         Vector3 origin = currentWeaponFirePoint.transform.position;
-        Vector3 direction = GetSpreadDirection();
+
+        Ray camRay = new Ray(Camera.main.transform.position, Camera.main.transform.forward);
+
+        Vector3 targetPoint;
+
+        if (Physics.Raycast(camRay, out RaycastHit camHit, EquippedWeapon.MaxRange, hitMask, QueryTriggerInteraction.Ignore))
+            targetPoint = camHit.point;
+        else
+            targetPoint = camRay.origin + camRay.direction * EquippedWeapon.MaxRange;
+
+        Vector3 direction = (targetPoint - origin).normalized;
 
         float remainingPenetration = EquippedWeapon.PiercingLevel;
 
         Ray ray = new Ray(origin, direction);
-        RaycastHit[] hits = Physics.RaycastAll(ray, EquippedWeapon.MaxRange);
+        RaycastHit[] hits = Physics.RaycastAll(ray, EquippedWeapon.MaxRange, hitMask, QueryTriggerInteraction.Ignore);
 
         System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        Vector3 endPoint = origin + direction * EquippedWeapon.MaxRange;
 
         foreach (RaycastHit hit in hits)
         {
             GameObject obj = hit.collider.gameObject;
 
-            Vector3 endPoint = origin + direction * EquippedWeapon.MaxRange;
-
-            // DAMAGE
             float distance01 = hit.distance / EquippedWeapon.MaxRange;
             float falloff = EquippedWeapon.WeaponFalloff.Evaluate(distance01);
             float damage = EquippedWeapon.Damage * falloff;
 
             DealDamage(obj, damage);
 
-            // PENETRATION CHECK
+            endPoint = hit.point;
+
             PenetratableObject pen = obj.GetComponent<PenetratableObject>();
 
             if (pen != null)
-            {
                 remainingPenetration -= pen.PenetrationBlockage;
-            }
             else
-            {
-                // Non-penetratable = stop
                 break;
-            }
-
-            endPoint = hit.point;
-            SpawnTracer(origin, endPoint);
 
             if (remainingPenetration < 0)
                 break;
         }
 
-        
+        SpawnSingleTracer(origin, endPoint);
     }
     public void RangedBurstHitscan()
     {
@@ -325,32 +330,60 @@ public class PlayerCombatManager : MonoBehaviour
     public void RangedShotgunHitscan()
     {
         if (!ConsumeAmmo()) return;
-
         if (currentWeaponFirePoint == null) return;
 
+        int pelletCount = EquippedWeapon.ShotgunPellets;
+
         Vector3 origin = currentWeaponFirePoint.transform.position;
-        Vector3 forward = Camera.main.transform.forward;
 
-        float range = EquippedWeapon.MaxRange;
-        float angle = EquippedWeapon.BaseSpreadAngle;
+        Ray camRay = new Ray(Camera.main.transform.position, Camera.main.transform.forward);
 
-        Collider[] hits = Physics.OverlapSphere(origin, range);
+        Vector3 baseTarget;
 
-        foreach (Collider col in hits)
+        if (Physics.Raycast(camRay, out RaycastHit camHit, EquippedWeapon.MaxRange, hitMask, QueryTriggerInteraction.Ignore))
+            baseTarget = camHit.point;
+        else
+            baseTarget = camRay.origin + camRay.direction * EquippedWeapon.MaxRange;
+
+        for (int i = 0; i < pelletCount; i++)
         {
-            Vector3 dirToTarget = (col.transform.position - origin).normalized;
-            float angleToTarget = Vector3.Angle(forward, dirToTarget);
+            Vector3 spreadDir = GetSpreadDirection();
+            Vector3 direction = (baseTarget - origin).normalized + spreadDir * 0.1f;
+            direction.Normalize();
 
-            if (angleToTarget <= angle)
+            Ray ray = new Ray(origin, direction);
+            RaycastHit[] hits = Physics.RaycastAll(ray, EquippedWeapon.MaxRange, hitMask, QueryTriggerInteraction.Ignore);
+
+            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+            Vector3 endPoint = origin + direction * EquippedWeapon.MaxRange;
+
+            float remainingPenetration = EquippedWeapon.PiercingLevel;
+
+            foreach (RaycastHit hit in hits)
             {
-                float distance = Vector3.Distance(origin, col.transform.position);
-                float distance01 = distance / range;
-                float falloff = EquippedWeapon.WeaponFalloff.Evaluate(distance01);
+                GameObject obj = hit.collider.gameObject;
 
+                float distance01 = hit.distance / EquippedWeapon.MaxRange;
+                float falloff = EquippedWeapon.WeaponFalloff.Evaluate(distance01);
                 float damage = EquippedWeapon.Damage * falloff;
 
-                DealDamage(col.gameObject, damage);
+                DealDamage(obj, damage);
+
+                endPoint = hit.point;
+
+                PenetratableObject pen = obj.GetComponent<PenetratableObject>();
+
+                if (pen != null)
+                    remainingPenetration -= pen.PenetrationBlockage;
+                else
+                    break;
+
+                if (remainingPenetration < 0)
+                    break;
             }
+
+            SpawnTracerPrefab(origin, endPoint);
         }
     }
 
@@ -430,12 +463,22 @@ public class PlayerCombatManager : MonoBehaviour
         if (currentWeaponFirePoint == null) return;
 
         Vector3 origin = currentWeaponFirePoint.transform.position;
-        Vector3 direction = GetSpreadDirection();
+
+        Ray camRay = new Ray(Camera.main.transform.position, Camera.main.transform.forward);
+
+        Vector3 targetPoint;
+
+        if (Physics.Raycast(camRay, out RaycastHit camHit, EquippedWeapon.MaxRange, hitMask, QueryTriggerInteraction.Ignore))
+            targetPoint = camHit.point;
+        else
+            targetPoint = camRay.origin + camRay.direction * EquippedWeapon.MaxRange;
+
+        Vector3 direction = (targetPoint - origin).normalized;
 
         float remainingPenetration = EquippedWeapon.PiercingLevel;
 
         Ray ray = new Ray(origin, direction);
-        RaycastHit[] hits = Physics.RaycastAll(ray, EquippedWeapon.MaxRange);
+        RaycastHit[] hits = Physics.RaycastAll(ray, EquippedWeapon.MaxRange, hitMask, QueryTriggerInteraction.Ignore);
 
         System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
 
@@ -451,7 +494,7 @@ public class PlayerCombatManager : MonoBehaviour
 
             DealDamage(obj, damage);
 
-            endPoint = hit.point; // tracer stops at first hit visually
+            endPoint = hit.point;
 
             PenetratableObject pen = obj.GetComponent<PenetratableObject>();
 
@@ -464,9 +507,8 @@ public class PlayerCombatManager : MonoBehaviour
                 break;
         }
 
-        SpawnTracer(origin, endPoint);
+        SpawnSingleTracer(origin, endPoint);
     }
-
     private void SpawnProjectile(Vector3 direction)
     {
         if (EquippedWeapon.ProjectileModel == null || currentWeaponFirePoint == null) return;
@@ -643,31 +685,57 @@ public class PlayerCombatManager : MonoBehaviour
         SwitchWeapon(newIndex);
     }
 
-    /// <summary>
-    /// Spawns a visible tracer line between two points
-    /// </summary>
-    private void SpawnTracer(Vector3 start, Vector3 end)
+    private void SpawnSingleTracer(Vector3 start, Vector3 end)
     {
-        if (tracerPrefab == null) return;
+        if (tracer == null)
+        {
+            Debug.LogWarning("Tracer is NULL");
+            return;
+        }
 
-        LineRenderer tracer = Instantiate(tracerPrefab);
+        tracer.enabled = true;
+        tracer.positionCount = 2;
 
         tracer.SetPosition(0, start);
         tracer.SetPosition(1, end);
 
-        StartCoroutine(DisableTracer(tracer));
+        // Properly stop previous coroutine
+        if (tracerRoutine != null)
+            StopCoroutine(tracerRoutine);
+
+        tracerRoutine = StartCoroutine(DisableTracer());
     }
 
-    /// <summary>
-    /// Handles tracer lifetime
-    /// </summary>
-    private IEnumerator DisableTracer(LineRenderer tracer)
+
+    private IEnumerator DisableTracer()
     {
         yield return new WaitForSeconds(tracerDuration);
 
         if (tracer != null)
-            Destroy(tracer.gameObject);
+            tracer.enabled = false;
     }
+
+    private void SpawnTracerPrefab(Vector3 start, Vector3 end)
+    {
+        if (tracerPrefab == null) return;
+
+        GameObject obj = Instantiate(tracerPrefab);
+        LineRenderer lr = obj.GetComponent<LineRenderer>();
+
+        if (lr == null)
+        {
+            Debug.LogWarning("Tracer prefab missing LineRenderer!");
+            Destroy(obj);
+            return;
+        }
+
+        lr.positionCount = 2;
+        lr.SetPosition(0, start);
+        lr.SetPosition(1, end);
+
+        Destroy(obj, tracerDuration);
+    }
+
 }
 
 [System.Serializable]
